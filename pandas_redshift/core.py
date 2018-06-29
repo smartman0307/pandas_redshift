@@ -58,12 +58,12 @@ def pandas_to_redshift(data_frame,
                        timeformat = 'auto',
                        region = '',
                        append = False,
-                      **kwargs):
+                       diststyle = 'even',
+                       distkey = '',
+                       sortkey = ''):
     rrwords = open(os.path.join(os.path.dirname(__file__), \
     'redshift_reserve_words.txt'), 'r').readlines()
     rrwords = [r.strip().lower() for r in rrwords]
-    accepted_kwargs = ['ACL', 'Body', 'CacheControl ',  'ContentDisposition', 'ContentEncoding', 'ContentLanguage', 'ContentLength', 'ContentMD5', 'ContentType', 'Expires', 'GrantFullControl', 'GrantRead', 'GrantReadACP', 'GrantWriteACP', 'Metadata', 'ServerSideEncryption', 'StorageClass', 'WebsiteRedirectLocation', 'SSECustomerAlgorithm', 'SSECustomerKey', 'SSECustomerKeyMD5', 'SSEKMSKeyId', 'RequestPayer', 'Tagging' ] # Available parameters for service: https://boto3.readthedocs.io/en/latest/reference/services/s3.html#S3.Client.put_object
-    extra_kwargs = {k: v for k, v in kwargs.items() if k in accepted_kwargs and v is not None}
     data_frame.columns = [x.lower() for x in data_frame.columns]
     not_valid = [r for r in data_frame.columns if r in rrwords]
     if not_valid:
@@ -76,7 +76,7 @@ def pandas_to_redshift(data_frame,
         # SEND DATA TO S3
         csv_buffer = StringIO()
         data_frame.to_csv(csv_buffer, index = index, sep = delimiter)
-        s3.Bucket(s3_bucket_var).put_object(Key= s3_subdirectory_var + csv_name, Body = csv_buffer.getvalue(), **extra_kwargs )
+        s3.Bucket(s3_bucket_var).put_object(Key= s3_subdirectory_var + csv_name, Body = csv_buffer.getvalue())
         print('saved file {0} in bucket {1}'.format(csv_name, s3_subdirectory_var + csv_name))
         # CREATE AN EMPTY TABLE IN REDSHIFT
         if index == True:
@@ -92,6 +92,17 @@ def pandas_to_redshift(data_frame,
         columns_and_data_type = ', '.join(['{0} {1}'.format(x, y) for x,y in zip(columns, column_data_types)])
         if append is False:
             create_table_query = 'create table {0} ({1})'.format(redshift_table_name, columns_and_data_type)
+            if len(distkey) == 0:
+                # Without a distkey, we can set a diststyle
+                if diststyle not in ['even', 'all']:
+                    raise ValueError("diststyle must be either 'even' or 'all'")
+                else:
+                    create_table_query += ' diststyle {0}'.format(diststyle)
+            else:
+                # otherwise, override diststyle with distkey
+                create_table_query += ' distkey({0})'.format(distkey)
+            if len(sortkey) > 0:
+                create_table_query += ' sortkey({0})'.format(sortkey)
             print(create_table_query)
             print('CREATING A TABLE IN REDSHIFT')
             cursor.execute('drop table if exists {0}'.format(redshift_table_name))
