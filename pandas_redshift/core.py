@@ -50,9 +50,9 @@ def connect_to_s3(aws_access_key_id, aws_secret_access_key, bucket, subdirectory
         aws_token = ''
 
 
-def redshift_to_pandas(sql_query):
+def redshift_to_pandas(sql_query, params):
     # pass a sql query and return a pandas dataframe
-    cursor.execute(sql_query)
+    cursor.execute(sql_query, params)
     columns_list = [desc[0] for desc in cursor.description]
     data = pd.DataFrame(cursor.fetchall(), columns=columns_list)
     return data
@@ -165,7 +165,7 @@ def create_redshift_table(data_frame,
     columns_and_data_type = ', '.join(
         ['{0} {1}'.format(x, y) for x, y in zip(columns, column_data_types)])
 
-    create_table_query = 'create table "{0}" ({1})'.format(
+    create_table_query = 'create table {0} ({1})'.format(
         redshift_table_name, columns_and_data_type)
     if not distkey:
         # Without a distkey, we can set a diststyle
@@ -183,7 +183,7 @@ def create_redshift_table(data_frame,
     if verbose:
         print(create_table_query)
         print('CREATING A TABLE IN REDSHIFT')
-    cursor.execute('drop table if exists "{0}"'.format(redshift_table_name))
+    cursor.execute('drop table if exists {0}'.format(redshift_table_name))
     cursor.execute(create_table_query)
     connect.commit()
 
@@ -207,7 +207,7 @@ def s3_to_redshift(redshift_table_name, csv_name, delimiter=',', quotechar='"',
         authorization = ""
 
     s3_to_sql = """
-    copy "{0}"
+    copy {0}
     from '{1}'
     delimiter '{2}'
     ignoreheader 1
